@@ -1,0 +1,30 @@
+# Netlify build and runtime configuration.
+#
+# The Next.js runtime is installed automatically for Next sites, so it is not
+# declared here. Server Actions, route handlers and middleware all run as Node
+# functions; nothing in this app is edge-only.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # package.json requires >= 20.11. Pinned so a Netlify default change cannot
+  # move the runtime underneath a working deploy.
+  NODE_VERSION = "22"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[context.production]
+  # Migrations run once, here, before the new code is published. Only the
+  # production context is pointed at the real database, so it is the only
+  # context that applies DDL. Scope DATABASE_URL to production in the Netlify
+  # UI (or give previews their own branch database) to keep that true.
+  command = "npm run db:migrate && npm run build"
+
+# The queue drain endpoint is internal: it is called by the scheduled function
+# using a bearer secret and must never be reachable from a browser or indexed.
+[[headers]]
+  for = "/api/internal/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "no-store"
