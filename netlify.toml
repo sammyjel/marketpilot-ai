@@ -24,7 +24,7 @@
   # build: the site still deploys and serves the pages that do not touch the
   # database, which is what makes a design deploy possible before the database
   # exists. The build log says plainly that it was skipped.
-  command = "if [ -n \"$DATABASE_URL\" ]; then npm run db:migrate; else echo 'DATABASE_URL is not set - skipping migrations. Pages that read the database will fail until it is.'; fi && npm run build"
+  command = "if [ -n \"$DATABASE_URL\" ] || [ -n \"$NETLIFY_DATABASE_URL\" ]; then npm run db:migrate; else echo 'No database URL is set - skipping migrations. Pages that read the database will fail until one is.'; fi && npm run build"
 
 # The queue drain endpoint is internal: it is called by the scheduled function
 # using a bearer secret and must never be reachable from a browser or indexed.

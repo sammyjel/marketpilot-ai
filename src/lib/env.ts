@@ -84,6 +84,15 @@ function load(): Env {
     if (typeof value === 'string' && value.trim() !== '') source[key] = value;
   }
 
+  // Netlify's database extension publishes its connection string under its own
+  // name. Adopting it as DATABASE_URL means a Netlify-provisioned database is
+  // used as-is, with nothing copied by hand and nothing to keep in sync. An
+  // explicit DATABASE_URL still wins, so pointing at a different database
+  // remains a matter of setting one variable.
+  if (!source['DATABASE_URL'] && source['NETLIFY_DATABASE_URL']) {
+    source['DATABASE_URL'] = source['NETLIFY_DATABASE_URL'];
+  }
+
   const parsed = schema.safeParse(source);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
