@@ -50,6 +50,13 @@ async function createHandle(): Promise<Handle> {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
+  // node-postgres emits 'error' on an *idle* client whose connection the server
+  // closed. Managed Postgres does that routinely, and with no listener attached
+  // it surfaces as an unhandled error that takes the whole instance down.
+  pool.on('error', (error) => {
+    logger.warn('db.idle_client_error', { error: error.message });
+  });
+
   const db = drizzle(pool, { schema, logger: false });
 
   const runMigrator = () => migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
@@ -70,7 +77,16 @@ async function createHandle(): Promise<Handle> {
 const globalRef = globalThis as typeof globalThis & { __marketpilotDb?: Promise<Handle> };
 
 function handle(): Promise<Handle> {
-  globalRef.__marketpilotDb ??= createHandle();
+  // A *failed* connection must never stay cached. Neon suspends an idle
+  // compute, so the first request after a scale-to-zero can time out — and
+  // because `??=` stores the promise itself, a rejected one would be handed to
+  // every later request on this instance, each failing instantly with the same
+  // error for as long as the instance lives. Clearing it means the next
+  // request opens a fresh connection instead.
+  globalRef.__marketpilotDb ??= createHandle().catch((error: unknown) => {
+    globalRef.__marketpilotDb = undefined;
+    throw error;
+  });
   return globalRef.__marketpilotDb;
 }
 
