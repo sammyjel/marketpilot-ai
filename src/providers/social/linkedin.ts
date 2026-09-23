@@ -15,7 +15,14 @@ import type {
 const AUTH_URL = 'https://www.linkedin.com/oauth/v2/authorization';
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const API_BASE = 'https://api.linkedin.com/rest';
-const LINKEDIN_VERSION = '202411';
+// LinkedIn requires a Linkedin-Version header on every /rest call and supports
+// each monthly version for a minimum of one year. A sunset version is rejected
+// outright with "Requested version <YYYYMM>01 is not active", which is a
+// publish failure rather than a warning -- so this needs bumping about once a
+// year. Active range when last checked (2026-09-24): 202510 through 202609.
+// Newest active version is listed at:
+// https://learn.microsoft.com/en-us/linkedin/marketing/versioning
+const LINKEDIN_VERSION = '202609';
 
 export class LinkedInPublisher extends BaseSocialPublisher {
   readonly platform: Platform = 'linkedin';
