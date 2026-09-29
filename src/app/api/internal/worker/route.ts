@@ -42,7 +42,25 @@ function authorised(request: Request): boolean {
   return a.byteLength === b.byteLength && timingSafeEqual(a, b);
 }
 
+/**
+ * Vercel's scheduler only ever issues GET, so the drain needs a GET door as
+ * well as the POST one Netlify's scheduled function uses. Both run the same
+ * handler behind the same bearer check: set Vercel's CRON_SECRET to the same
+ * value as WORKER_SECRET and one secret covers both hosts.
+ *
+ * A GET that mutates is not something to do lightly, but this route is not
+ * reachable from a browser (no-store, noindex, and closed unless the secret
+ * matches), and it is the only shape Vercel cron can call.
+ */
+export async function GET(request: Request): Promise<NextResponse> {
+  return drain(request);
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
+  return drain(request);
+}
+
+async function drain(request: Request): Promise<NextResponse> {
   if (!authorised(request)) {
     logger.warn('worker.drain_unauthorised');
     return NextResponse.json({ error: { code: 'forbidden', message: 'Not authorised.' } }, { status: 403 });

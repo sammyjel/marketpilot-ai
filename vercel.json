@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "if [ -n \"$DATABASE_URL\" ]; then npm run db:migrate; else echo 'No DATABASE_URL set - skipping migrations.'; fi && npm run build",
+  "crons": [
+    {
+      "path": "/api/internal/worker",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
