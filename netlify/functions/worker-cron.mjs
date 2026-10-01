@@ -63,12 +63,11 @@ export default async function handler() {
   });
 }
 
-// PAUSED 2026-09-25 at the owner's request — marketpilot is idled until he asks
-// for it to resume. With no `schedule` exported, Netlify does not auto-invoke this
-// function, so the queue-drain (the only recurring cost) stops entirely and the
-// account bills ~nothing. The handler above is untouched, so /api/internal/worker
-// can still be hit manually if ever needed. TO RESUME: uncomment the block below
-// (e.g. '*/30 * * * *' for every 30 min) and redeploy.
-// export const config = {
-//   schedule: '*/30 * * * *',
-// };
+// Every 15 minutes. The original '* * * * *' was the cost leak: ~43k cron runs
+// a month plus the same again in drain calls, nearly all of them finding an
+// empty queue, which exhausted the Netlify account. A quarter-hour cadence is
+// ~2,880 runs a month -- about 3% of that -- while still processing a queued
+// job within 15 minutes rather than once a day.
+export const config = {
+  schedule: '*/15 * * * *',
+};
