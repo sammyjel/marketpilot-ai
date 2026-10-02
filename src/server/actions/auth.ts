@@ -4,8 +4,6 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { type ActionState, failure, fromError, success } from '@/lib/action-state';
-import { env } from '@/lib/env';
-import { logger } from '@/lib/logger';
 import { MIN_PASSWORD_LENGTH } from '@/server/auth/password';
 import { destroySession } from '@/server/auth/session';
 import { setActiveOrganization } from '@/server/auth/context';
@@ -18,6 +16,7 @@ import {
   resetPassword,
   verifyEmail,
 } from '@/server/services/accounts';
+import { sendPasswordResetEmail, sendVerificationEmail } from '@/server/services/account-email';
 
 async function clientIp(): Promise<string> {
   const headerList = await headers();
@@ -65,13 +64,10 @@ export async function signUpAction(_prev: ActionState<null>, formData: FormData)
       ipAddress: await clientIp(),
     });
 
-    // Until an email transport is configured, the verification link is logged
-    // for the developer instead of being silently dropped.
-    if (env().MOCK_EXTERNAL_SERVICES) {
-      logger.info('auth.verification_link', {
-        url: `${env().APP_URL}/verify-email?token=${result.verificationToken}`,
-      });
-    }
+    // Delivery failures are logged inside the account-email layer and never
+    // thrown: the account exists either way, and a second link can be
+    // requested. Failing the signup here would be the worse outcome.
+    await sendVerificationEmail(parsed.data.email, result.verificationToken);
   } catch (error) {
     return fromError(error);
   }
@@ -121,9 +117,9 @@ export async function requestPasswordResetAction(
 
   try {
     const token = await requestPasswordReset(parsed.data.email, await clientIp());
-    if (token && env().MOCK_EXTERNAL_SERVICES) {
-      logger.info('auth.password_reset_link', { url: `${env().APP_URL}/reset-password?token=${token}` });
-    }
+    // A null token means no such account. The response below is identical
+    // either way, so an attacker cannot use this to enumerate addresses.
+    if (token) await sendPasswordResetEmail(parsed.data.email, token);
   } catch (error) {
     return fromError(error);
   }

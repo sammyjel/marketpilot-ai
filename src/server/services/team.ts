@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { planFor } from '@/lib/plans';
 import { getDb } from '@/server/db';
 import { organizationInvitations, organizationMembers, organizations, users } from '@/server/db/schema';
+import { sendInvitationEmail } from './account-email';
 import type { AuthContext } from '@/server/auth/context';
 import { assertCapability } from '@/server/auth/context';
 import type { MemberRole } from '@/server/auth/permissions';
@@ -137,6 +138,15 @@ export async function inviteMember(
 
   const inviteUrl = `${env().APP_URL.replace(/\/$/, '')}/invite?token=${token}`;
   logger.info('team.invite_created', { organizationId: ctx.organization.id, role: input.role });
+
+  // The URL is still returned so an admin can copy the link directly, which
+  // is the only route that works when no transport is configured.
+  await sendInvitationEmail({
+    to: email,
+    organizationName: ctx.organization.name,
+    inviteUrl,
+    invitedByName: ctx.user.name ?? undefined,
+  });
 
   return { inviteUrl };
 }

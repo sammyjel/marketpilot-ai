@@ -25,7 +25,7 @@ const schema = z.object({
 
   AI_PROVIDER: z.enum(['mock', 'anthropic', 'openai']).default('mock'),
   AI_PROVIDER_API_KEY: optional,
-  AI_MODEL: z.string().default('claude-sonnet-5'),
+  AI_MODEL: z.string().default('claude-opus-5-5'),
 
   IMAGE_PROVIDER: z.enum(['mock', 'openai', 'stability']).default('mock'),
   IMAGE_PROVIDER_API_KEY: optional,
@@ -35,6 +35,16 @@ const schema = z.object({
 
   VOICE_PROVIDER: z.enum(['mock', 'elevenlabs']).default('mock'),
   VOICE_PROVIDER_API_KEY: optional,
+
+  /**
+   * Transactional email. Without a transport the application still runs, but
+   * every verification and reset link is logged rather than delivered -- which
+   * is fine in development and locks real users out in production.
+   */
+  EMAIL_PROVIDER: z.enum(['mock', 'resend']).default('mock'),
+  EMAIL_PROVIDER_API_KEY: optional,
+  /** Envelope sender, e.g. "MarketPilot AI <hello@example.com>". */
+  EMAIL_FROM: optional,
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_DIR: z.string().default('./.storage'),

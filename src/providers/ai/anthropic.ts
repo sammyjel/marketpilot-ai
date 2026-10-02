@@ -7,9 +7,11 @@ const TIMEOUT_MS = 120_000;
 
 /** Per-million-token prices in micro-USD, used for cost attribution only. */
 const PRICING: Record<string, { input: number; output: number }> = {
+  'claude-opus-5-5': { input: 4_000_000, output: 20_000_000 },
   'claude-opus-5': { input: 5_000_000, output: 25_000_000 },
-  'claude-sonnet-5': { input: 3_000_000, output: 15_000_000 },
-  'claude-haiku-4-5-20251001': { input: 1_000_000, output: 5_000_000 },
+  'claude-sonnet-5-5': { input: 2_000_000, output: 10_000_000 },
+  'claude-sonnet-5': { input: 2_000_000, output: 10_000_000 },
+  'claude-haiku-4-5': { input: 1_000_000, output: 5_000_000 },
 };
 
 type AnthropicResponse = {
