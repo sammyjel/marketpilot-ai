@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { getDb } from '@/server/db';
 import { requeueStalled } from '@/server/jobs/queue';
 import { tick } from '@/server/jobs/worker';
+import { dispatchDueScheduledPosts } from '@/server/services/publishing';
 
 /**
  * Queue drain over HTTP, for hosts with no always-on process.
@@ -71,11 +72,20 @@ async function drain(request: Request): Promise<NextResponse> {
 
   const startedAt = Date.now();
   let processed = 0;
+  let dispatched = 0;
   let drained = false;
 
   try {
     // One sweep per invocation returns jobs abandoned by a killed invocation.
     await requeueStalled(await getDb());
+
+    // Turning due schedule rows into publish jobs happens here, not in a
+    // `publishing.dispatch_scheduled` job: that kind has a handler but nothing
+    // ever enqueued it, so on a serverless host a scheduled post stayed
+    // `pending` for ever while publish-now posts went out fine. Running it
+    // before the drain loop means anything it finds is published in this same
+    // invocation, and it costs one indexed query when nothing is due.
+    dispatched = await dispatchDueScheduledPosts();
 
     while (Date.now() - startedAt < budgetMs) {
       const worked = await tick();
@@ -93,8 +103,8 @@ async function drain(request: Request): Promise<NextResponse> {
     );
   }
 
-  logger.info('worker.drained', { processed, drained, ms: Date.now() - startedAt });
+  logger.info('worker.drained', { processed, dispatched, drained, ms: Date.now() - startedAt });
 
   // `more` tells the caller whether another invocation has work waiting.
-  return NextResponse.json({ data: { processed, more: !drained } });
+  return NextResponse.json({ data: { processed, dispatched, more: !drained } });
 }
