@@ -98,6 +98,17 @@ export abstract class BaseLanguageModelProvider implements LanguageModelProvider
  * Maps an HTTP failure from any vendor onto our error vocabulary so callers can
  * treat rate limits, timeouts and outages uniformly.
  */
+/** Pulls the human-readable reason out of an Anthropic/OpenAI error body. */
+function providerMessage(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown } };
+    const message = parsed.error?.message;
+    return typeof message === 'string' && message.trim() ? message.trim().slice(0, 300) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function mapProviderHttpError(status: number, body: string, vendor: string): AppError {
   if (status === 401 || status === 403) {
     return new AppError('provider_unavailable', `The ${vendor} API key is missing or not authorised.`, {
@@ -118,7 +129,16 @@ export function mapProviderHttpError(status: number, body: string, vendor: strin
     });
   }
   logger.error('ai.provider_error', { vendor, status, body: body.slice(0, 500) });
-  return new AppError('provider_unavailable', `${vendor} rejected the request.`, { details: { status } });
+
+  // The provider's own explanation is the only thing that makes a 4xx
+  // diagnosable, and it was previously discarded -- the caller stored a bare
+  // "rejected the request" while the reason sat in a log nobody reads.
+  const reason = providerMessage(body);
+  return new AppError(
+    'provider_unavailable',
+    reason ? `${vendor} rejected the request (${status}): ${reason}` : `${vendor} rejected the request (${status}).`,
+    { details: { status } },
+  );
 }
 
 /** Wraps fetch with a hard timeout so a hung provider cannot stall a job. */

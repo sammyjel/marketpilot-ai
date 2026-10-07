@@ -5,6 +5,19 @@ const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 const TIMEOUT_MS = 120_000;
 
+/**
+ * Whether the model still accepts `temperature` / `top_p` / `top_k`.
+ *
+ * Current-generation models removed the sampling parameters and reject a
+ * request that carries them with a 400 -- which surfaces as a bare "rejected
+ * the request" and is extremely hard to trace back. Omitting them is valid on
+ * every model, so the safe default is to omit and send only for the older
+ * families that still take them. Anything unrecognised is treated as current.
+ */
+function acceptsSampling(model: string): boolean {
+  return /^claude-(haiku-|instant-|opus-4-6|sonnet-4-6|opus-4-5|sonnet-4-5|2|3)/.test(model);
+}
+
 /** Per-million-token prices in micro-USD, used for cost attribution only. */
 const PRICING: Record<string, { input: number; output: number }> = {
   'claude-opus-5-5': { input: 4_000_000, output: 20_000_000 },
@@ -53,7 +66,7 @@ export class AnthropicProvider extends BaseLanguageModelProvider {
         body: JSON.stringify({
           model: this.model,
           max_tokens: request.maxTokens ?? 4096,
-          temperature: request.temperature ?? 0.7,
+          ...(acceptsSampling(this.model) ? { temperature: request.temperature ?? 0.7 } : {}),
           ...(request.system ? { system: request.system } : {}),
           messages: request.messages.map((message) => ({
             role: message.role,
