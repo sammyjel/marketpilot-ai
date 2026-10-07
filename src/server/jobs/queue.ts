@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, or, sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { getDb, type Database } from '@/server/db';
 import { jobs } from '@/server/db/schema';
@@ -69,6 +69,10 @@ export async function claimNext(db: Database, kinds?: JobKind[]): Promise<JobRec
       select id from jobs
       where status = 'queued'
         and run_at <= now()
+        -- Without this, a job whose worker is killed mid-flight is requeued by
+        -- the stalled sweep and reclaimed for ever: nothing else enforces
+        -- max_attempts, because failJob only runs when the job throws.
+        and attempts < max_attempts
         ${kindFilter}
       order by priority asc, run_at asc
       for update skip locked
@@ -127,6 +131,30 @@ export async function failJob(db: Database, job: JobRecord, error: unknown, retr
 /** Requeues jobs left `running` by a worker that died mid-flight. */
 export async function requeueStalled(db: Database, olderThanMs = 10 * 60_000): Promise<number> {
   const cutoff = new Date(Date.now() - olderThanMs);
+
+  // A job that has already used its attempts is dead, not stalled. Requeueing
+  // it unconditionally is what turns "too slow to finish inside one
+  // invocation" into an endless retry loop that bills a provider every lap, so
+  // those are buried first and only the rest are offered another go.
+  const buried = await db
+    .update(jobs)
+    .set({
+      status: 'dead_letter',
+      finishedAt: new Date(),
+      lastError: 'Worker exited before the job finished, and no attempts remain.',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(jobs.status, 'running'),
+        lte(jobs.startedAt, cutoff),
+        gte(jobs.attempts, jobs.maxAttempts),
+      ),
+    )
+    .returning({ id: jobs.id });
+
+  if (buried.length > 0) logger.error('job.dead_lettered_stalled', { count: buried.length });
+
   const requeued = await db
     .update(jobs)
     .set({ status: 'queued', updatedAt: new Date() })
