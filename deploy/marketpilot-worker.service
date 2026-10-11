@@ -1,0 +1,27 @@
+[Unit]
+Description=MarketPilot AI - job worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/marketpilot/repo
+EnvironmentFile=/opt/marketpilot/.env
+Environment=NODE_ENV=production
+# The whole point of moving off Netlify: a process that lives long enough to
+# finish a six-stage campaign generation instead of being killed at 30 seconds.
+ExecStart=/usr/bin/npm run worker
+Restart=always
+RestartSec=10
+
+MemoryMax=600M
+MemorySwapMax=512M
+# Lower than the streams so the encoders always win a contended CPU.
+CPUWeight=10
+Nice=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

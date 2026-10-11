@@ -1,0 +1,31 @@
+[Unit]
+Description=MarketPilot AI - web
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/marketpilot/current
+EnvironmentFile=/opt/marketpilot/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Bound to loopback: nginx is the only thing that may reach it.
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+# This box's first duty is three live ffmpeg streams. A hard cap means a leak
+# here is killed by the cgroup instead of the kernel picking an OOM victim,
+# which it might well pick from the radio.
+MemoryMax=600M
+MemorySwapMax=512M
+CPUWeight=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
