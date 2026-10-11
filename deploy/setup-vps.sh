@@ -26,8 +26,9 @@ if [ ! -f /swapfile ]; then
 else
   echo "    already present"
 fi
-sysctl -w vm.swappiness=10 >/dev/null
-grep -q '^vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' >> /etc/sysctl.conf
+# Ubuntu 26.04 ships no /etc/sysctl.conf; drop-ins are the supported route.
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-marketpilot.conf
+sysctl -p /etc/sysctl.d/99-marketpilot.conf >/dev/null
 
 echo "==> 2/5  Node 22"
 if ! command -v node >/dev/null 2>&1; then

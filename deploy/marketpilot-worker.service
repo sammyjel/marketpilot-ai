@@ -10,7 +10,7 @@ EnvironmentFile=/opt/marketpilot/.env
 Environment=NODE_ENV=production
 # The whole point of moving off Netlify: a process that lives long enough to
 # finish a six-stage campaign generation instead of being killed at 30 seconds.
-ExecStart=/usr/bin/npm run worker
+ExecStart=/usr/local/bin/npm run worker
 Restart=always
 RestartSec=10
 
