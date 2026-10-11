@@ -48,6 +48,30 @@ pick an OOM victim, and ffmpeg is a fat target. Three guards:
 
 The worker also runs at `Nice=10` and `CPUWeight=10`, below the encoders.
 
+## Measured on the box, 11 Oct 2026
+
+The box was prepared and the whole stack proven before any secret was moved.
+These are real numbers from `178.105.200.215`, not estimates:
+
+| Step | Result |
+|---|---|
+| `npm ci` (453 packages) | 19 s, peak well inside the 900 MB cap |
+| `npm run build` | **1 m 49 s**, peak 1,265 MB of 1,909 MB |
+| Standalone bundle | **71 MB** (vs 698 MB `node_modules`) |
+| Migrations on PostgreSQL 18.6 | clean, 29 tables |
+| Server boot | ready in **222 ms** |
+| `/`, `/login`, `/pricing` | **200**, 32–114 ms |
+| Running server RSS | **158 MB** |
+| Three ffmpeg streams | **active throughout every step** |
+
+Swap was never meaningfully touched (40 MB at peak). The build is the only
+tight moment and it had ~640 MB to spare, so building on the box is fine and
+the CI fallback below is insurance, not the plan.
+
+Already done: swap, Node 22.23.3, PostgreSQL 18.6 (localhost-only, tuned),
+database + role created, repo cloned, both systemd units installed and
+enabled, `/opt/marketpilot/.env` skeleton written.
+
 ## Steps
 
 ### 0. Open the firewall — only you can do this
@@ -100,7 +124,18 @@ bash /opt/marketpilot/repo/deploy/deploy.sh
 Builds, migrates, releases, restarts, health-checks. Keeps the last three
 releases — rolling back is re-pointing the `current` symlink and restarting.
 
-### 6. Put it on the internet
+### 6. Get a hostname (DuckDNS, free)
+
+1. Go to **duckdns.org**, sign in with GitHub or Google.
+2. Type a name — e.g. `marketpilot` — and click **add domain**. You now own
+   `marketpilot.duckdns.org`.
+3. Put `178.105.200.215` in its IP box and click **update ip**.
+4. Set `APP_URL=https://marketpilot.duckdns.org` in `/opt/marketpilot/.env`.
+
+That is the whole cost: nothing. You can move to a real domain later; the only
+rework is re-pointing DNS and updating the LinkedIn redirect URI again.
+
+### 7. Put it on the internet
 ```
 cp /root/deploy/nginx-marketpilot.conf /etc/nginx/sites-available/marketpilot
 sed -i 's/APP_DOMAIN/your.domain/g' /etc/nginx/sites-available/marketpilot
@@ -109,7 +144,7 @@ nginx -t && systemctl reload nginx
 certbot --nginx -d your.domain
 ```
 
-### 7. Cut over
+### 8. Cut over
 1. Point the domain's DNS A record at `178.105.200.215`.
 2. Update the **LinkedIn app's redirect URI** to the new domain — OAuth breaks
    otherwise, and the existing connection stops refreshing.
