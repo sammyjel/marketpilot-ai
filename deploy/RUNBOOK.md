@@ -104,6 +104,16 @@ process now runs), and drop `WORKER_SECRET` once the cron is gone.
 chmod 600 /opt/marketpilot/.env
 ```
 
+**Quote any value containing a space.** systemd's `EnvironmentFile=` takes the
+rest of the line as-is, but `deploy.sh` also sources this file with `.` under
+`set -e`, and POSIX sh reads `APP_NAME=MarketPilot AI` as "set APP_NAME, then
+run `AI`" — which aborts the deploy. Write `APP_NAME="MarketPilot AI"`.
+
+Two helpers on the box fill this in interactively rather than by hand:
+`fill-secrets.sh` (input hidden) and `fill-secrets-visible.sh` (input echoed,
+for terminals where pasting into a hidden prompt silently fails). Both skip
+anything already set, so they are safe to re-run.
+
 ### 3. Copy the data across
 ```
 NEON_URL='postgresql://...' bash /root/deploy/migrate-db.sh
