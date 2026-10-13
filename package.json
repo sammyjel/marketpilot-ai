@@ -22,7 +22,8 @@
     "e2e": "node --conditions=react-server --import tsx scripts/e2e.ts",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "create-account": "node --conditions=react-server --import tsx scripts/create-account.ts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
