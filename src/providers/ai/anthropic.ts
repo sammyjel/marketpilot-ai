@@ -30,6 +30,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
 type AnthropicResponse = {
   content: { type: string; text?: string }[];
   model: string;
+  stop_reason?: string;
   usage: { input_tokens: number; output_tokens: number };
 };
 
@@ -98,6 +99,7 @@ export class AnthropicProvider extends BaseLanguageModelProvider {
     return {
       text,
       model: body.model,
+      ...(body.stop_reason === 'max_tokens' ? { truncated: true } : {}),
       usage: {
         inputTokens: body.usage.input_tokens,
         outputTokens: body.usage.output_tokens,

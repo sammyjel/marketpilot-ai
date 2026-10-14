@@ -14,6 +14,15 @@ import type {
  * Shared JSON handling for every adapter: schema instruction, extraction,
  * validation and a single repair round-trip. Adapters only implement `complete`.
  */
+/**
+ * Budget for a second attempt. Doubling gives a stage that merely overran room
+ * to finish, while the cap stops a pathological response running away. Nothing
+ * is spent unless the tokens are actually generated.
+ */
+function raisedBudget(current: number | undefined): number {
+  return Math.min((current ?? 4096) * 2, 16_000);
+}
+
 export abstract class BaseLanguageModelProvider implements LanguageModelProvider {
   abstract readonly name: string;
   abstract readonly model: string;
@@ -24,37 +33,54 @@ export abstract class BaseLanguageModelProvider implements LanguageModelProvider
   async completeJson<T extends z.ZodType>(request: JsonRequest<T>): Promise<JsonResult<z.infer<T>>> {
     const { schema, schemaName, system, messages, ...rest } = request;
     const instruction = schemaInstruction(schemaName, schema);
+    const fullSystem = system ? `${system}\n\n${instruction}` : instruction;
 
-    const first = await this.complete({
-      ...rest,
-      system: system ? `${system}\n\n${instruction}` : instruction,
-      messages,
-    });
+    const first = await this.complete({ ...rest, system: fullSystem, messages });
 
     const firstAttempt = this.tryParse(schema, first.text);
     if (firstAttempt.ok) {
       return { data: firstAttempt.data, usage: first.usage, model: first.model, repaired: false };
     }
 
-    logger.warn('ai.json_repair', { stage: request.stage ?? schemaName, issues: firstAttempt.issues.slice(0, 400) });
+    const stage = request.stage ?? schemaName;
+    const retryBudget = raisedBudget(rest.maxTokens);
 
-    // One repair attempt: show the model its own output and what was wrong.
-    const second = await this.complete({
-      ...rest,
-      system: system ? `${system}\n\n${instruction}` : instruction,
-      messages: [
-        ...messages,
-        { role: 'assistant', content: first.text.slice(0, 12_000) },
-        {
-          role: 'user',
-          content: [
-            'That response did not match the required schema. Problems:',
-            firstAttempt.issues,
-            '',
-            'Return the corrected JSON only. Keep the content you already wrote wherever it was valid.',
-          ].join('\n'),
-        },
-      ],
+    // Running out of output budget and diverging from the schema are different
+    // failures, and one second attempt cannot serve both.
+    //
+    // A truncated response is not wrong, only unfinished. Feeding the fragment
+    // back and asking for a correction makes the model regenerate all of it,
+    // from a longer prompt, under the same ceiling that just proved too low --
+    // so the repair truncates as well and a recoverable stage fails hard. Ask
+    // again with room to finish instead.
+    const second = first.truncated
+      ? await this.complete({ ...rest, maxTokens: retryBudget, system: fullSystem, messages })
+      : await this.complete({
+          ...rest,
+          // A repair restates the whole object plus the correction, so it needs
+          // at least as much room as the attempt it is fixing.
+          maxTokens: retryBudget,
+          system: fullSystem,
+          messages: [
+            ...messages,
+            { role: 'assistant', content: first.text.slice(0, 12_000) },
+            {
+              role: 'user',
+              content: [
+                'That response did not match the required schema. Problems:',
+                firstAttempt.issues,
+                '',
+                'Return the corrected JSON only. Keep the content you already wrote wherever it was valid.',
+              ].join('\n'),
+            },
+          ],
+        });
+
+    logger.warn(first.truncated ? 'ai.truncated_retry' : 'ai.json_repair', {
+      stage,
+      ...(first.truncated
+        ? { firstMaxTokens: rest.maxTokens ?? null, retryMaxTokens: retryBudget }
+        : { issues: firstAttempt.issues.slice(0, 400) }),
     });
 
     const secondAttempt = this.tryParse(schema, second.text);
@@ -62,7 +88,14 @@ export abstract class BaseLanguageModelProvider implements LanguageModelProvider
       throw new AppError(
         'provider_unavailable',
         'The AI could not produce a usable result. Please try generating again.',
-        { details: { stage: request.stage ?? schemaName }, retryable: true },
+        {
+          details: {
+            stage,
+            reason: second.truncated ? 'truncated' : 'schema_mismatch',
+            issues: secondAttempt.issues.slice(0, 200),
+          },
+          retryable: true,
+        },
       );
     }
 

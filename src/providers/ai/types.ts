@@ -36,6 +36,12 @@ export type CompletionResult = {
   text: string;
   usage: TokenUsage;
   model: string;
+  /**
+   * True when the model stopped because it reached `maxTokens` rather than
+   * because it had finished. The text is then a fragment, and no amount of
+   * re-prompting at the same budget will complete it.
+   */
+  truncated?: boolean;
 };
 
 export type JsonRequest<T extends z.ZodType> = CompletionRequest & {

@@ -5,7 +5,7 @@ const API_URL = 'https://api.openai.com/v1/chat/completions';
 const TIMEOUT_MS = 120_000;
 
 type OpenAiResponse = {
-  choices: { message: { content: string | null } }[];
+  choices: { message: { content: string | null }; finish_reason?: string }[];
   model: string;
   usage?: { prompt_tokens: number; completion_tokens: number };
 };
@@ -63,6 +63,7 @@ export class OpenAiProvider extends BaseLanguageModelProvider {
     return {
       text: body.choices[0]?.message.content ?? '',
       model: body.model,
+      ...(body.choices[0]?.finish_reason === 'length' ? { truncated: true } : {}),
       usage: {
         inputTokens: body.usage?.prompt_tokens ?? 0,
         outputTokens: body.usage?.completion_tokens ?? 0,

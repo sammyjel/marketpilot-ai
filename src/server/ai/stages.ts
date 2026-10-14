@@ -78,7 +78,7 @@ export async function analyzeProduct(input: {
     schema: productAnalysisSchema,
     schemaName: 'ProductAnalysis',
     temperature: 0.2,
-    maxTokens: 1500,
+    maxTokens: 3000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
@@ -94,7 +94,7 @@ export async function generateStrategy(context: GenerationContext): Promise<Stag
     schema: campaignStrategySchema,
     schemaName: 'CampaignStrategy',
     temperature: 0.8,
-    maxTokens: 3000,
+    maxTokens: 6000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
@@ -117,7 +117,7 @@ export async function generatePlatformContent<P extends Platform>(input: {
     schema,
     schemaName: `${PLATFORM_META[input.platform].label}Content`,
     temperature: 0.9,
-    maxTokens: 3000,
+    maxTokens: 4000,
   });
 
   return { data: result.data as Record<string, unknown>, usage: result.usage, model: result.model };
@@ -136,7 +136,7 @@ export async function generateSeo(input: {
     schema: seoSchema,
     schemaName: 'SeoPackage',
     temperature: 0.5,
-    maxTokens: 2500,
+    maxTokens: 4000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
@@ -156,7 +156,7 @@ export async function generateCreativeBrief(input: {
     schema: creativeBriefSchema,
     schemaName: 'CreativeBrief',
     temperature: 0.8,
-    maxTokens: 3000,
+    maxTokens: 8000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
@@ -175,7 +175,7 @@ export async function runQualityControl(input: {
     schema: qualityReportSchema,
     schemaName: 'QualityReport',
     temperature: 0.1,
-    maxTokens: 3000,
+    maxTokens: 4000,
   });
 
   logger.info('ai.quality_control', {
@@ -212,7 +212,7 @@ export async function editContent(input: {
     schema: rewriteSchema,
     schemaName: 'RewriteResult',
     temperature: input.operation === 'regenerate' ? 1 : 0.6,
-    maxTokens: 2500,
+    maxTokens: 4000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
@@ -232,7 +232,7 @@ export async function generateAnalyticsInsights(input: {
     schema: analyticsInsightSchema,
     schemaName: 'AnalyticsInsights',
     temperature: 0.3,
-    maxTokens: 2000,
+    maxTokens: 3000,
   });
 
   return { data: result.data, usage: result.usage, model: result.model };
