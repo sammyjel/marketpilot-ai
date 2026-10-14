@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { extractJson, describeSchema } from '@/providers/ai/json';
 import { MockLanguageModelProvider } from '@/providers/ai/mock';
 import {
@@ -91,11 +92,32 @@ describe('JSON extraction from model output', () => {
 describe('schema description for prompts', () => {
   it('renders a readable shape', () => {
     const described = describeSchema(seoSchema) as Record<string, unknown>;
-    expect(described['title']).toBe('string');
-    expect(described['keywords']).toEqual(['string']);
+    expect(described['title']).toBe('string (max 70 chars)');
+    expect(described['keywords']).toEqual(['string (max 60 chars)', '...max 25 items']);
     expect(described['searchIntent']).toEqual(
       expect.arrayContaining(['informational', 'commercial', 'transactional', 'navigational']),
     );
+  });
+
+  // A whole six-stage generation used to fail because one `format` label came
+  // back three characters over its cap. The model was told the field was a
+  // "string" and nothing more, so it had no way to comply.
+  it('tells the model the bounds it will be validated against', () => {
+    const strategy = describeSchema(campaignStrategySchema) as Record<string, unknown>;
+    const plan = strategy['contentPlan'] as [Record<string, unknown>, string];
+
+    expect(plan[0]['format']).toBe('string (max 40 chars)');
+    expect(plan[1]).toBe('...max 20 items');
+  });
+
+  it('leaves an unbounded field unadorned', () => {
+    expect(describeSchema(z.string())).toBe('string');
+    expect(describeSchema(z.array(z.string()))).toEqual(['string']);
+  });
+
+  it('does not report a minimum of one, which only means non-empty', () => {
+    expect(describeSchema(z.string().min(1))).toBe('string');
+    expect(describeSchema(z.string().min(3))).toBe('string (min 3 chars)');
   });
 });
 

@@ -72,14 +72,58 @@ export function describeIssues(error: z.ZodError): string {
  * A JSON Schema sketch generated from a Zod schema, good enough to steer a
  * model. Only the subset the prompts actually use is handled.
  */
+/**
+ * Pulls the bounds back out of a Zod check list.
+ *
+ * Zod keeps them on `def.checks`, each wrapped in a `_zod.def`. Without this
+ * the schema sent to the model says only "string", so a field capped at 40
+ * characters reads as unbounded and the model has no way to comply -- which
+ * showed up in production as a whole six-stage generation failing because one
+ * `format` label came back a few characters too long.
+ */
+function limits(def: Record<string, unknown>): string[] {
+  const checks = (def['checks'] as { _zod?: { def?: Record<string, unknown> } }[] | undefined) ?? [];
+  const out: string[] = [];
+  for (const check of checks) {
+    const d = check._zod?.def;
+    if (!d) continue;
+    switch (d['check']) {
+      case 'max_length':
+        out.push(`max ${String(d['maximum'])}`);
+        break;
+      case 'min_length':
+        // A minimum of 1 only means "not empty", which the shape already implies.
+        if (Number(d['minimum']) > 1) out.push(`min ${String(d['minimum'])}`);
+        break;
+      case 'less_than':
+        out.push(`max ${String(d['value'])}`);
+        break;
+      case 'greater_than':
+        out.push(`min ${String(d['value'])}`);
+        break;
+      default:
+        break;
+    }
+  }
+  return out;
+}
+
+/** Renders a scalar with its bounds, e.g. `string (max 40 chars)`. */
+function annotate(kind: 'string' | 'number', def: Record<string, unknown>): string {
+  const found = limits(def);
+  if (found.length === 0) return kind;
+  const unit = kind === 'string' ? ' chars' : '';
+  return `${kind} (${found.join(', ')}${unit})`;
+}
+
 export function describeSchema(schema: z.ZodType): unknown {
   const def = schema.def as unknown as { type: string } & Record<string, unknown>;
 
   switch (def.type) {
     case 'string':
-      return 'string';
+      return annotate('string', def);
     case 'number':
-      return 'number';
+      return annotate('number', def);
     case 'boolean':
       return 'boolean';
     case 'literal': {
@@ -88,8 +132,12 @@ export function describeSchema(schema: z.ZodType): unknown {
     }
     case 'enum':
       return Object.values((def['entries'] as Record<string, unknown>) ?? {});
-    case 'array':
-      return [describeSchema(def['element'] as z.ZodType)];
+    case 'array': {
+      const items = describeSchema(def['element'] as z.ZodType);
+      const limit = limits(def).find((text) => text.startsWith('max'));
+      // A cap on item count only needs saying when there is one.
+      return limit ? [items, `...${limit} items`] : [items];
+    }
     case 'object': {
       const shape = (def['shape'] as Record<string, z.ZodType>) ?? {};
       const out: Record<string, unknown> = {};
