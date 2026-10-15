@@ -30,7 +30,7 @@ export function storage(): StorageProvider {
       publicBaseUrl: config.STORAGE_PUBLIC_URL,
     });
   } else {
-    cached = new LocalStorageProvider(config.STORAGE_LOCAL_DIR);
+    cached = new LocalStorageProvider(config.STORAGE_LOCAL_DIR, config.STORAGE_PUBLIC_URL);
   }
 
   return cached;

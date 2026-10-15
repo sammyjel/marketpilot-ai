@@ -13,9 +13,11 @@ import type { PutOptions, StorageProvider, StoredObject } from './types';
 export class LocalStorageProvider implements StorageProvider {
   readonly name = 'local';
   private readonly root: string;
+  private readonly publicBaseUrl: string | undefined;
 
-  constructor(root: string) {
+  constructor(root: string, publicBaseUrl?: string) {
     this.root = path.resolve(process.cwd(), root);
+    this.publicBaseUrl = publicBaseUrl?.replace(/\/$/, '');
   }
 
   private resolve(key: string): string {
@@ -80,9 +82,22 @@ export class LocalStorageProvider implements StorageProvider {
     return null;
   }
 
-  async publicUrlFor(): Promise<string | null> {
-    // A localhost path is not reachable by a platform's media fetcher.
-    return null;
+  async publicUrlFor(key: string): Promise<string | null> {
+    // Instagram and Pinterest do not accept uploaded bytes: their servers fetch
+    // the media themselves, so a key is only publishable if it resolves to a
+    // URL reachable from the public internet.
+    //
+    // This returned null unconditionally while the application ran serverless,
+    // where local disk genuinely was not addressable. Self-hosted behind a web
+    // server it can be, so the capability is now configuration rather than a
+    // reason to require object storage. Still null when unset: silently
+    // handing out an unreachable URL would fail later and less clearly.
+    if (!this.publicBaseUrl) return null;
+
+    // The key is path-like and already confined by `resolve`; encode each
+    // segment so a key cannot alter the URL's structure.
+    const encoded = key.split('/').map(encodeURIComponent).join('/');
+    return `${this.publicBaseUrl}/${encoded}`;
   }
 
   static keyFor(organizationId: string, kind: string, extension: string): string {
